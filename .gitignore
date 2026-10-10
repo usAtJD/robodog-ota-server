@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+ota_data.json
+*.log
+.DS_Store
