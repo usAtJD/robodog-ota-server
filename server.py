@@ -625,11 +625,14 @@ function toast(msg, color='#06b6d4') {
   setTimeout(() => t.style.display = 'none', 3500);
 }
 
+let lastData = {devices:[], pending_updates:{}, latest_release:{}};
+
 async function fetchStatus() {
   try {
     const r = await fetch('/api/status');
     if (r.status === 401 || r.redirected) { location.reload(); return; }
     const d = await r.json();
+    lastData = d;
     render(d);
   } catch(e) { console.error(e); }
 }
@@ -682,30 +685,45 @@ function render(data) {
       badges += '<span class="badge badge-updated">En Son Surum</span> ';
     }
 
-    const devDisplayName = dev.name ? dev.name : 'Robodog Kart';
+    const hasCustomName = (dev.name && dev.name.trim().length > 0);
+    const devDisplayName = hasCustomName ? dev.name : 'Robodog Kart';
     const lastSeenFormatted = dev.last_seen ? new Date(dev.last_seen).toLocaleString('tr-TR') : 'Bilinmiyor';
 
+    let nameSection = '';
+    if (editingMac === dev.mac) {
+      nameSection = `
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="text" class="name-edit-input" id="name-${dev.mac}" value="${dev.name || ''}" placeholder="Karta İsim Ver" autofocus onkeydown="if(event.key==='Enter') saveName('${dev.mac}')">
+          <button class="btn btn-cyan" style="padding:5px 12px;font-size:0.78rem;" onclick="saveName('${dev.mac}')">Kaydet</button>
+          <button class="btn btn-gray" style="padding:5px 10px;font-size:0.78rem;" onclick="cancelEditName()">İptal</button>
+        </div>
+      `;
+    } else {
+      nameSection = `
+        <span class="dev-name" style="font-size:1.05rem;color:${hasCustomName ? '#38bdf8' : '#f8fafc'};">${devDisplayName}</span>
+        <button onclick="startEditName('${dev.mac}')" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:0.85rem;padding:2px 6px;" title="İsmi Değiştir">✏️</button>
+      `;
+    }
+
     return `<div class="device ${isPend ? 'pending-border' : ''}">
-      <div class="dot ${dotCls}" title="${isOnline ? 'Cevrimici' : 'Cevrimdisi'}"></div>
+      <div class="dot ${dotCls}" title="${isOnline ? 'Çevrimiçi' : 'Çevrimdışı'}"></div>
       <div class="dev-info">
         <div class="dev-title-row">
-          <span class="dev-name">${devDisplayName}</span>
+          ${nameSection}
           <span class="dev-mac">[${dev.mac}]</span>
           ${badges}
         </div>
         <div class="dev-meta">
           IP: ${dev.ip || '-'} &nbsp;|&nbsp; 
-          Yuklu Surum: <strong>v${dev.current_version || '0.0.0'}</strong> &nbsp;|&nbsp; 
-          Son Baglanti: ${lastSeenFormatted}
+          Yüklü Sürüm: <strong>v${dev.current_version || '0.0.0'}</strong> &nbsp;|&nbsp; 
+          Son Bağlantı: ${lastSeenFormatted}
         </div>
       </div>
       <div class="dev-actions">
-        <input type="text" class="name-edit-input" id="name-${dev.mac}" value="${dev.name || ''}" placeholder="Cihaz Ismi">
-        <button class="btn btn-gray" onclick="saveName('${dev.mac}')" title="Ismi ve cihazi hafizaya kaydet">Kaydet</button>
         ${isPend
-          ? `<button class="btn btn-red" onclick="cancelDev('${dev.mac}')">Iptal Et</button>`
-          : `<button class="btn btn-green" onclick="triggerDev('${dev.mac}')">Guncelle</button>`}
-        <button class="btn btn-gray" style="color:#ef4444;" onclick="deleteDev('${dev.mac}')" title="Listeden kaldir">Sil</button>
+          ? `<button class="btn btn-red" onclick="cancelDev('${dev.mac}')">Güncellemeyi İptal Et</button>`
+          : `<button class="btn btn-green" style="font-size:0.95rem;padding:10px 20px;box-shadow:0 0 15px rgba(16,185,129,0.3);" onclick="triggerDev('${dev.mac}')">🚀 Güncelle</button>`}
+        <button class="btn btn-gray" style="color:#ef4444;padding:8px 12px;" onclick="deleteDev('${dev.mac}')" title="Cihazı Listeden Sil">Sil</button>
       </div>
     </div>`;
   }).join('');
@@ -737,6 +755,18 @@ async function cancelAll() {
   fetchStatus();
 }
 
+let editingMac = null;
+
+function startEditName(mac) {
+  editingMac = mac;
+  render(lastData);
+}
+
+function cancelEditName() {
+  editingMac = null;
+  render(lastData);
+}
+
 async function saveName(mac) {
   const input = document.getElementById('name-' + mac);
   const name = input ? input.value.trim() : '';
@@ -747,7 +777,8 @@ async function saveName(mac) {
   });
   const d = await r.json();
   if (r.ok) {
-    toast(d.message || 'Cihaz bilgileri kaydedildi');
+    editingMac = null;
+    toast(d.message || 'İsim başarıyla kaydedildi!');
   } else {
     toast(d.error || 'Hata!', '#ef4444');
   }
